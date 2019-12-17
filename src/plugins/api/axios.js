@@ -1,20 +1,20 @@
 // util/axios.js
 import axios from 'axios'
-import { Loading } from 'element-ui';
+import { Loading } from 'element-ui'
 let loadingCount = 0; // loading计数
 let loadingInstance;  // loading方法赋值
 const pending = {}
 const CancelToken = axios.CancelToken
 const removePending = (key, isRequest = false) => {
   if (pending[key] && isRequest) {
-    // loadingCount--;
+    loadingCount--;
     // loading计数小于等0 关闭loading
-    // if( loadingCount <= 0){
-    //   loadingCount = 0;
-    //   setTimeout(() =>{
-    //     loadingInstance.close();
-    //   },100)
-    // }
+    if( loadingCount <= 0){
+      loadingCount = 0;
+      setTimeout(() =>{
+        loadingInstance.close();
+      },100)
+    }
     pending[key]('取消重复请求')
   }
   delete pending[key]
@@ -29,8 +29,15 @@ const getRequestIdentify = (config, isReuest = false) => {
 
 // 请求拦截器
 axios.interceptors.request.use(config => {
-  // loadingCount++;
-  // loadingInstance = Loading.service({ fullscreen: true });
+  // 设置请求头
+  let user = sessionStorage.getItem('user');
+  if(user){
+    let token = JSON.parse(user).token;
+    config.headers.common['token'] = token; 
+  }
+
+  loadingCount++;
+  loadingInstance = Loading.service({ fullscreen: true });
   // 拦截重复请求(即当前正在进行的相同请求)
   let requestData = getRequestIdentify(config, true)
   removePending(requestData, true)
@@ -38,7 +45,6 @@ axios.interceptors.request.use(config => {
   config.cancelToken = new CancelToken((c) => {
     pending[requestData] = c
   })
-
   return config
 }, error => {
   return Promise.reject(error)
@@ -46,14 +52,14 @@ axios.interceptors.request.use(config => {
 
 // 异常处理
 axios.interceptors.response.use(response => {
-  // loadingCount--;
+  loadingCount--;
   // loading计数小于等0 关闭loading
-  // if( loadingCount <= 0){
-  //   loadingCount = 0;
-  //   setTimeout(() =>{
-  //     loadingInstance.close();
-  //   },100)
-  // }
+  if( loadingCount <= 0){
+    loadingCount = 0;
+    setTimeout(() =>{
+      loadingInstance.close();
+    },100)
+  }
   // 把已经完成的请求从 pending 中移除
   let requestData = getRequestIdentify(response.config)
   removePending(requestData)
@@ -62,16 +68,23 @@ axios.interceptors.response.use(response => {
   //   message: response.statusText,
   //   data: response.data
   // }
+  if(response.data && response.data.code && response.data.code === '6666'){
+    for(let key in pending){
+      loadingCount = 0;
+      pending[key]('取消重复请求')
+      delete pending[key]
+    }
+  }
   return Promise.resolve(response.data);
 }, err => {
-  // loadingCount--;
+  loadingCount--;
   // loading计数小于等0 关闭loading
-  // if( loadingCount <= 0){
-  //   loadingCount = 0;
-  //   setTimeout(() =>{
-  //     loadingInstance.close();
-  //   },100)
-  // } 
+  if( loadingCount <= 0){
+    loadingCount = 0;
+    setTimeout(() =>{
+      loadingInstance.close();
+    },100)
+  } 
   if (err && err.response) {
     switch (err.response.status) {
       case 400:
